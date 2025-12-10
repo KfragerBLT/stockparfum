@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gestion des stocks - Kylian</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #f5f5f5;
+      color: #111;
+    }
+
+    .app {
+      max-width: 950px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 16px 20px 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.06);
+    }
+
+    h1 {
+      font-size: 1.3rem;
+      margin: 0 0 4px;
+    }
+
+    .subtitle {
+      font-size: 0.8rem;
+      color: #666;
+      margin-bottom: 16px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    thead {
+      background: #111;
+      color: #fff;
+    }
+
+    th, td {
+      padding: 6px 8px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    th {
+      font-weight: 600;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      padding: 4px 6px;
+      font-size: 0.8rem;
+      background: #fff;
+    }
+
+    input[type="number"] {
+      text-align: right;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #111;
+    }
+
+    .stock-actuel {
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .low-stock {
+      background: #ffe5e5 !important;
+    }
+
+    .low-stock .stock-actuel {
+      color: #c00000;
+    }
+
+    .btn-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border-radius: 999px;
+      border: none;
+      padding: 6px 16px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #111;
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #e5e5e5;
+      color: #111;
+    }
+
+    .summary {
+      margin-top: 12px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #111;
+      color: #fff;
+      font-size: 0.8rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .summary span {
+      white-space: nowrap;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      background: #fff;
+      color: #111;
+      margin-left: 6px;
+    }
+
+    @media (max-width: 720px) {
+      table, thead, tbody, th, td, tr {
+        display: block;
+      }
+
+      thead {
+        display: none;
+      }
+
+      tbody tr {
+        margin-bottom: 10px;
+        border-radius: 8px;
+        border: 1px solid #eee;
+        overflow: hidden;
+      }
+
+      td {
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+
+      td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #444;
+      }
+
+      .stock-actuel {
+        text-align: right;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Gestion des stocks</h1>
+    <div class="subtitle">Suivi rapide des produits (embed Notion).</div>
+
+    <table id="stock-table">
+      <thead>
+        <tr>
+          <th style="width: 26%">Produit</th>
+          <th style="width: 13%">Stock initial</th>
+          <th style="width: 13%">Entrées</th>
+          <th style="width: 13%">Sorties</th>
+          <th style="width: 13%">Seuil alerte</th>
+          <th style="width: 12%">Stock actuel</th>
+          <th style="width: 10%">⚙️</th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <!-- Lignes générées en JS -->
+      </tbody>
+    </table>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="add-row">+ Ajouter un produit</button>
+      <button class="btn-secondary" id="reset-table">Réinitialiser</button>
+    </div>
+
+    <div class="summary" id="summary">
+      <span>Produits suivis : <strong id="nb-products">0</strong></span>
+      <span>Stock total : <strong id="total-stock">0</strong></span>
+      <span>Alertes : <strong id="nb-alerts">0</strong><span class="badge">stock bas</span></span>
+    </div>
+  </div>
+
+  <script>
+    const tableBody = document.getElementById("table-body");
+    const addRowBtn = document.getElementById("add-row");
+    const resetBtn = document.getElementById("reset-table");
+    const nbProductsEl = document.getElementById("nb-products");
+    const totalStockEl = document.getElementById("total-stock");
+    const nbAlertsEl = document.getElementById("nb-alerts");
+
+    function createRow(name = "", init = "", inQ = "", outQ = "", seuil = "") {
+      const tr = document.createElement("tr");
+
+      tr.innerHTML = `
+        <td data-label="Produit">
+          <input type="text" class="prod-name" value="${name}" placeholder="Nom / réf." />
+        </td>
+        <td data-label="Stock initial">
+          <input type="number" class="stock-init" min="0" value="${init}" />
+        </td>
+        <td data-label="Entrées">
+          <input type="number" class="stock-in" min="0" value="${inQ}" />
+        </td>
+        <td data-label="Sorties">
+          <input type="number" class="stock-out" min="0" value="${outQ}" />
+        </td>
+        <td data-label="Seuil alerte">
+          <input type="number" class="stock-threshold" min="0" value="${seuil}" />
+        </td>
+        <td data-label="Stock actuel" class="stock-actuel">0</td>
+        <td data-label="Supprimer">
+          <button class="btn-secondary btn-delete">✕</button>
+        </td>
+      `;
+
+      tableBody.appendChild(tr);
+      attachEvents(tr);
+      updateAll();
+    }
+
+    function getNumberValue(input) {
+      const v = parseFloat(input.value.replace(",", "."));
+      return isNaN(v) ? 0 : v;
+    }
+
+    function updateRow(tr) {
+      const initInput = tr.querySelector(".stock-init");
+      const inInput = tr.querySelector(".stock-in");
+      const outInput = tr.querySelector(".stock-out");
+      const seuilInput = tr.querySelector(".stock-threshold");
+      const stockCell = tr.querySelector(".stock-actuel");
+
+      const init = getNumberValue(initInput);
+      const entries = getNumberValue(inInput);
+      const exits = getNumberValue(outInput);
+      const seuil = getNumberValue(seuilInput);
+
+      const current = init + entries - exits;
+      stockCell.textContent = current.toFixed(0);
+
+      tr.classList.remove("low-stock");
+      if (current <= seuil && (init || entries || exits || seuil)) {
+        tr.classList.add("low-stock");
+      }
+    }
+
+    function updateAll() {
+      const rows = tableBody.querySelectorAll("tr");
+      let totalStock = 0;
+      let alerts = 0;
+
+      rows.forEach((tr) => {
+        updateRow(tr);
+        const stockCell = tr.querySelector(".stock-actuel");
+        const current = parseFloat(stockCell.textContent);
+        totalStock += isNaN(current) ? 0 : current;
+        if (tr.classList.contains("low-stock")) alerts++;
+      });
+
+      nbProductsEl.textContent = rows.length;
+      totalStockEl.textContent = totalStock.toFixed(0);
+      nbAlertsEl.textContent = alerts;
+    }
+
+    function attachEvents(tr) {
+      const inputs = tr.querySelectorAll("input");
+      inputs.forEach((input) => {
+        input.addEventListener("input", () => {
+          updateRow(tr);
+          updateAll();
+        });
+      });
+
+      const deleteBtn = tr.querySelector(".btn-delete");
+      deleteBtn.addEventListener("click", () => {
+        tr.remove();
+        updateAll();
+      });
+    }
+
+    addRowBtn.addEventListener("click", () => {
+      createRow();
+    });
+
+    resetBtn.addEventListener("click", () => {
+      if (confirm("Réinitialiser tous les produits ?")) {
+        tableBody.innerHTML = "";
+        updateAll();
+      }
+    });
+
+    // Lignes de base
+    createRow("Parfum H001", 50, 0, 0, 10);
+    createRow("Parfum F001", 40, 0, 0, 8);
+  </script>
+</body>
+</html>
